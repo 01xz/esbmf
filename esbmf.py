@@ -31,7 +31,8 @@ def calc_association_matrix(boolean_matrix: np.ndarray, threshold: int) -> np.nd
     association_matrix: numpy.ndarray
     """
     cols = boolean_matrix.shape[1]
-    inner_product = lambda i, j: np.dot(boolean_matrix[:, i], boolean_matrix[:, j])
+    float_matrix = boolean_matrix.astype(float)
+    inner_product = lambda i, j: np.dot(float_matrix[:, i], float_matrix[:, j])
     association = lambda i, j: inner_product(i, j) / inner_product(i, i) >= threshold
     association_matrix = np.vectorize(association)(*np.indices((cols, cols)))
     return association_matrix
