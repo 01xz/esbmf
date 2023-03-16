@@ -17,14 +17,14 @@ def hamming_distance(a: np.ndarray, b: np.ndarray) -> int:
     return np.count_nonzero(a ^ b)
 
 
-def calc_association_matrix(boolean_matrix: np.ndarray, threshold: int) -> np.ndarray:
+def calc_association_matrix(boolean_matrix: np.ndarray, threshold: float) -> np.ndarray:
     """
     Calculate the association matrix
 
     Parameters
     ----------
     boolean_matrix: numpy.ndarray
-    threshold: int
+    threshold: float
 
     Returns
     -------
