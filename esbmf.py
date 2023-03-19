@@ -79,5 +79,5 @@ def boolean_matrix_column_error_clear(orig: np.ndarray, approx: np.ndarray, c_co
     diff = lambda i: hamming_distance(approx[:, i], orig[:, i]) - hamming_distance(
         (approx | c_col[:, np.newaxis])[:, i], orig[:, i])
     diff_row = np.vectorize(diff)(np.arange(cols))
-    c_col = np.where(diff_row < 0, 0, diff_row).astype(bool)
-    return c_col
+    dc_row = np.where(diff_row < 0, 0, diff_row).astype(bool)
+    return dc_row
