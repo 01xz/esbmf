@@ -256,7 +256,7 @@ def generate_next_approx(orig: np.ndarray, approx: np.ndarray, k: int) -> Tuple[
     # error reduction of all candidates of mem
     mem_err_reduct = lambda i: cal_current_error_reduction(orig, approx, mem_approx(i))
     mem_err_reducts = np.array([mem_err_reduct(i) for i in np.arange(search_space_rows)], dtype=int)
-    # residual errors of all candidate of mem
+    # TODO: residual errors of all candidate of mem
     mem_resid_errs = lambda i: np.sum(cal_top_n_col_error(orig, mem_approx(i), cols - k, 'min')[0])
     # error matrix for cec scheme
     cec_error = orig ^ approx
