@@ -265,6 +265,7 @@ def generate_next_approx(orig: np.ndarray, approx: np.ndarray, k: int) -> Tuple[
     # column error clean scheme
     cec_dc_row = lambda j: boolean_matrix_column_error_clear(orig, approx, cec_c_col(j))
     # all candidates from cec
+    # TODO: addition type
     cec_approx = lambda j: approx | (cec_c_col(j) & cec_dc_row(j))
     # error reduction of all candidates of cec
     cec_err_reduct = lambda j: cal_current_error_reduction(orig, approx, cec_approx(j))
