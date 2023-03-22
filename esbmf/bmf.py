@@ -59,8 +59,8 @@ class BMF:
 
     def __column_error_clear(self, c_col):
         assert c_col.shape[1] == 1 and self.orig.shape[0] == c_col.shape[0]
-        diff = lambda i: utils.hamming_distance(self.approx[:, i], self.orig[:, i]) - utils.hamming_distance(
-            (self.approx | c_col)[:, i], self.orig[:, i])
+        diff = lambda j: utils.hamming_distance(self.approx[:, j], self.orig[:, j]) - utils.hamming_distance(
+            (self.approx | c_col)[:, j], self.orig[:, j])
         diff_row = np.vectorize(diff)(np.arange(self.cols))
         dc_row = np.where(diff_row < 0, 0, diff_row).astype(bool)
         return dc_row
