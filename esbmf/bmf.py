@@ -133,6 +133,7 @@ class BMF:
         self.__res = np.hstack([mem_min_re]) if (k == 0) else np.hstack([self.__res, mem_min_re])
 
     def __err_shape_scheme(self, k):
+        assert self.orig.shape == self.approx.shape
         if (self.__enable_err_shape):
             err = self.orig ^ self.approx
             idx = np.argmax(np.sum(err, axis=0))
