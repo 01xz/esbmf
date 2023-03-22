@@ -12,7 +12,6 @@ class BMF:
         self.dc = None
         self.approx = None
         self.add_type = None
-        self.__k = None
         self.__search_space = None
         self.__p_c = None
         self.__p_dc = None
@@ -25,14 +24,12 @@ class BMF:
         self.dc = None
         self.approx = np.zeros_like(self.orig, dtype=bool)
         self.add_type = None
-        self.__k = 0
         self.__search_space = None
         self.__p_c = None
         self.__p_dc = None
         self.__res = None
 
     def __err_shape_scheme_init(self):
-        self.__k = 0
         self.__hd = utils.hamming_distance(self.orig, self.approx)
         self.__enable_err_shape = False
 
@@ -72,14 +69,14 @@ class BMF:
         assert self.orig.shape == cur_approx.shape
         return utils.hamming_distance(self.approx, self.orig) - utils.hamming_distance(cur_approx, self.orig)
 
-    def __get_cur_resid_err(self, cur_approx):
+    def __get_cur_resid_err(self, cur_approx, k):
         assert self.orig.shape == cur_approx.shape
-        n = self.cols - (self.f - self.__k - 1)
+        n = self.cols - (self.f - k - 1)
         err = np.sum(self.orig ^ cur_approx, axis=0)
         resid_err = np.sum(err) if (n == self.cols) else np.sum(np.partition(err, n)[:n])
         return resid_err
 
-    def __greedy_scheme(self):
+    def __greedy_scheme(self, k):
         assert self.orig.shape == self.approx.shape
         # using cp - conditional probability to generate search space
         self.__generate_search_space(0.1, 'cp')
@@ -98,7 +95,7 @@ class BMF:
         # mem score = err_reduct + zero_prop
         mem_scores = np.array([mem_err_reduct(i) + mem_zero_prop(i) for i in np.arange(ss_rows)], dtype=float)
         # residual error of all candidates of mem
-        mem_resid_err = lambda i: self.__get_cur_resid_err(mem_approx(i))
+        mem_resid_err = lambda i: self.__get_cur_resid_err(mem_approx(i), k)
         # mem residual error score = resid_err + one_prop
         mem_re_scores = np.array([mem_resid_err(i) + mem_one_prop(i) for i in np.arange(ss_rows)], dtype=float)
         # error matrix for cec scheme
@@ -128,15 +125,14 @@ class BMF:
         # potential result
         p_c_col, p_dc_row = mem_c_col(mem_re_index), mem_dc_row(mem_re_index)
         # update
-        self.c = np.hstack([c_col]) if (self.__k == 0) else np.hstack([self.c, c_col])
-        self.dc = np.vstack([dc_row]) if (self.__k == 0) else np.vstack([self.dc, dc_row])
+        self.c = np.hstack([c_col]) if (k == 0) else np.hstack([self.c, c_col])
+        self.dc = np.vstack([dc_row]) if (k == 0) else np.vstack([self.dc, dc_row])
         self.approx = np.dot(self.c, self.dc)
-        self.__p_c = np.hstack([p_c_col]) if (self.__k == 0) else np.hstack([self.__p_c, p_c_col])
-        self.__p_dc = np.vstack([p_dc_row]) if (self.__k == 0) else np.vstack([self.__p_dc, p_dc_row])
-        self.__res = np.hstack([mem_min_re]) if (self.__k == 0) else np.hstack([self.__res, mem_min_re])
+        self.__p_c = np.hstack([p_c_col]) if (k == 0) else np.hstack([self.__p_c, p_c_col])
+        self.__p_dc = np.vstack([p_dc_row]) if (k == 0) else np.vstack([self.__p_dc, p_dc_row])
+        self.__res = np.hstack([mem_min_re]) if (k == 0) else np.hstack([self.__res, mem_min_re])
 
-    def __err_shape_scheme(self):
-        k = self.__k
+    def __err_shape_scheme(self, k):
         if (self.__enable_err_shape):
             err = self.orig ^ self.approx
             idx = np.argmax(np.sum(err, axis=0))
@@ -151,15 +147,13 @@ class BMF:
 
     def run_greedy_scheme(self):
         self.__greedy_scheme_init()
-        while (self.__k < self.f):
-            self.__greedy_scheme()
-            self.__k += 1
+        for k in range(0, self.f):
+            self.__greedy_scheme(k)
 
     def run_err_shape_scheme(self):
         self.__err_shape_scheme_init()
-        while (self.__k < self.f):
-            self.__err_shape_scheme()
-            self.__k += 1
+        for k in range(0, self.f):
+            self.__err_shape_scheme(k)
 
     def run_esbmf(self):
         self.run_greedy_scheme()
