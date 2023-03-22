@@ -31,3 +31,12 @@ def calc_cond_prob_matrix(m, t):
     cp_false_matrix = cp_false_matrix[np.any(cp_false_matrix != 0, axis=1)]
     cond_prob_matrix = np.unique(np.vstack([cp_true_matrix, cp_false_matrix]), axis=0)
     return cond_prob_matrix
+
+
+def calc_mix_addition(a, b, j):
+    assert a.shape == b.shape and len(a.shape) == 2 and j < a.shape[1]
+    col_xor = (a[:, j] ^ b[:, j])[:, np.newaxis]
+    col_or_left = a[:, :j] | b[:, :j]
+    col_or_right = a[:, j + 1:] | b[:, j + 1:]
+    result = np.hstack([col_or_left, col_xor, col_or_right])
+    return result
