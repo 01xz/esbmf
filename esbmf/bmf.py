@@ -159,16 +159,16 @@ class BMF:
                 self.__enable_err_shape = True
         self.__update_approx(k)
 
-    def run_greedy_scheme(self):
+    def __run_greedy_scheme(self):
         self.__greedy_scheme_init()
         for k in range(0, self.f):
             self.__greedy_scheme(k)
 
-    def run_err_shape_scheme(self):
+    def __run_err_shape_scheme(self):
         self.__err_shape_scheme_init()
         for k in range(0, self.f):
             self.__err_shape_scheme(k)
 
     def run_esbmf(self):
-        self.run_greedy_scheme()
-        self.run_err_shape_scheme()
+        self.__run_greedy_scheme()
+        self.__run_err_shape_scheme()
