@@ -4,10 +4,11 @@ from esbmf import utils
 
 class BMF:
 
-    def __init__(self, orig, f):
+    def __init__(self, orig, f, w=None):
         self.orig = orig
         self.rows, self.cols = self.orig.shape
         self.f = f
+        self.w = w or (np.ones(self.cols, dtype=float) / self.cols)
         self.c = None
         self.dc = None
         self.add_t = None
@@ -16,7 +17,7 @@ class BMF:
         self.__p_c = None
         self.__p_dc = None
         self.__res = None
-        self.__hd = None
+        self.__greedy_scheme_err = None
         self.__enable_err_shape = False
 
     def __greedy_scheme_init(self):
@@ -30,7 +31,7 @@ class BMF:
         self.__res = None
 
     def __err_shape_scheme_init(self):
-        self.__hd = utils.hamming_distance(self.orig, self.approx)
+        self.__greedy_scheme_err = utils.weighted_distance(self.orig, self.approx, self.w)
         self.__enable_err_shape = False
         self.approx = np.zeros_like(self.orig, dtype=bool)
 
@@ -49,11 +50,12 @@ class BMF:
 
     def __matrix_error_minimize(self, dc_row):
         assert dc_row.shape[0] == self.orig.shape[1] and len(dc_row.shape) == 1
-        diff = lambda i: utils.hamming_distance(self.approx[i, :], self.orig[i, :]) - utils.hamming_distance(
-            (self.approx | dc_row)[i, :], self.orig[i, :])
+        e = 1e-10
+        diff = lambda i: np.sum((self.approx[i, :] ^ self.orig[i, :]) * self.w) - np.sum(
+            ((self.approx | dc_row)[i, :] ^ self.orig[i, :]) * self.w)
         diff_col = np.vectorize(diff)(np.arange(self.rows))
-        num_p, num_n = np.count_nonzero(diff_col > 0), np.count_nonzero(diff_col < 0)
-        replace_zeros = np.where(diff_col == 0, int(num_p > num_n), diff_col)
+        num_p, num_n = np.count_nonzero(diff_col > e), np.count_nonzero(diff_col < -e)
+        replace_zeros = np.where(np.abs(diff_col) <= e, int(num_p > num_n), diff_col)
         c_col = np.where(replace_zeros < 0, 0, replace_zeros).astype(bool)
         c_col = c_col[:, np.newaxis]
         return c_col
@@ -68,12 +70,13 @@ class BMF:
 
     def __get_cur_err_reduct(self, cur_approx):
         assert self.orig.shape == cur_approx.shape
-        return utils.hamming_distance(self.approx, self.orig) - utils.hamming_distance(cur_approx, self.orig)
+        return utils.weighted_distance(self.approx, self.orig, self.w) - utils.weighted_distance(
+            cur_approx, self.orig, self.w)
 
     def __get_cur_resid_err(self, cur_approx, k):
         assert self.orig.shape == cur_approx.shape
         n = self.cols - (self.f - k - 1)
-        err = np.sum(self.orig ^ cur_approx, axis=0)
+        err = np.sum(self.orig ^ cur_approx, axis=0) * self.w * self.cols
         resid_err = np.sum(err) if (n == self.cols) else np.sum(np.partition(err, n)[:n])
         return resid_err
 
@@ -148,14 +151,14 @@ class BMF:
         assert self.orig.shape == self.approx.shape
         if (self.__enable_err_shape):
             err = self.orig ^ self.approx
-            idx = np.argmax(np.sum(err, axis=0))
+            idx = np.argmax(np.sum(err, axis=0) * self.w * self.cols)
             c_col = err[:, idx]
             dc_row = self.__column_error_clear(c_col[:, np.newaxis], idx)
             add_t = np.array([True if j == idx else False for j in range(self.cols)], dtype=bool)
             self.c[:, k], self.dc[k, :] = c_col, dc_row
             self.add_t[k, :] = add_t
         else:
-            if (self.__res[k] < self.__hd and k < self.f - 1):
+            if (self.__res[k] < self.__greedy_scheme_err and k < self.f - 1):
                 self.c[:, k], self.dc[k, :] = self.__p_c[:, k], self.__p_dc[k, :]
                 self.__enable_err_shape = True
         self.__update_approx(k)

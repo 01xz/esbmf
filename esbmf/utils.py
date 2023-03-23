@@ -6,6 +6,11 @@ def hamming_distance(a, b):
     return np.count_nonzero(a ^ b)
 
 
+def weighted_distance(a, b, w):
+    assert a.shape == b.shape and len(a.shape) == 2 and w.shape[0] == a.shape[1]
+    return np.sum(np.sum(a ^ b, axis=0) * w) * a.shape[1]
+
+
 def calc_asso_matrix(m, t):
     assert len(m.shape) == 2 and t > 0.0 and t < 1.0
     cols = m.shape[1]
