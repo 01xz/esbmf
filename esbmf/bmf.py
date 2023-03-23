@@ -32,6 +32,7 @@ class BMF:
     def __err_shape_scheme_init(self):
         self.__hd = utils.hamming_distance(self.orig, self.approx)
         self.__enable_err_shape = False
+        self.approx = np.zeros_like(self.orig, dtype=bool)
 
     def __generate_search_space(self, step: float, mode: str):
         assert len(self.approx.shape) == 2
@@ -60,7 +61,7 @@ class BMF:
     def __column_error_clear(self, c_col, j_xor):
         assert c_col.shape[1] == 1 and self.orig.shape[0] == c_col.shape[0]
         diff = lambda j: utils.hamming_distance(self.approx[:, j], self.orig[:, j]) - utils.hamming_distance(
-            utils.calc_mix_addition(self.orig, np.tile(c_col, (1, self.cols)), j_xor)[:, j], self.orig[:, j])
+            utils.calc_mix_addition(self.approx, np.tile(c_col, (1, self.cols)), j_xor)[:, j], self.orig[:, j])
         diff_row = np.vectorize(diff)(np.arange(self.cols))
         dc_row = np.where(diff_row < 0, 0, diff_row).astype(bool)
         return dc_row
@@ -78,9 +79,9 @@ class BMF:
 
     def __update_approx(self, k):
         enable_cec = not np.all(self.add_t[k, :] == False)
-        cec_index = np.where(self.add_t[k, :])[0]
         c_col, dc_row = self.c[:, k][:, np.newaxis], self.dc[k, :]
-        approx = utils.calc_mix_addition(self.approx, c_col & dc_row, cec_index) if (enable_cec) \
+        add_t = self.add_t[k, :]
+        approx = utils.calc_mix_addition(self.approx, c_col & dc_row, np.where(add_t)[0][0]) if (enable_cec) \
             else self.approx | (c_col & dc_row)
         self.approx = approx
 
@@ -148,14 +149,14 @@ class BMF:
         if (self.__enable_err_shape):
             err = self.orig ^ self.approx
             idx = np.argmax(np.sum(err, axis=0))
-            c_col = err[:, idx][:, np.newaxis]
-            dc_row = self.__column_error_clear(c_col, idx)
+            c_col = err[:, idx]
+            dc_row = self.__column_error_clear(c_col[:, np.newaxis], idx)
             add_t = np.array([True if j == idx else False for j in range(self.cols)], dtype=bool)
             self.c[:, k], self.dc[k, :] = c_col, dc_row
             self.add_t[k, :] = add_t
         else:
             if (self.__res[k] < self.__hd and k < self.f - 1):
-                self.c[:, k], self.dc[k, :] = self.__p_c[k], self.__p_dc[k]
+                self.c[:, k], self.dc[k, :] = self.__p_c[:, k], self.__p_dc[k, :]
                 self.__enable_err_shape = True
         self.__update_approx(k)
 
