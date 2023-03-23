@@ -10,8 +10,8 @@ class BMF:
         self.f = f
         self.c = None
         self.dc = None
+        self.add_t = None
         self.approx = None
-        self.add_type = None
         self.__search_space = None
         self.__p_c = None
         self.__p_dc = None
@@ -22,8 +22,8 @@ class BMF:
     def __greedy_scheme_init(self):
         self.c = None
         self.dc = None
+        self.add_t = None
         self.approx = np.zeros_like(self.orig, dtype=bool)
-        self.add_type = None
         self.__search_space = None
         self.__p_c = None
         self.__p_dc = None
@@ -57,10 +57,10 @@ class BMF:
         c_col = c_col[:, np.newaxis]
         return c_col
 
-    def __column_error_clear(self, c_col):
+    def __column_error_clear(self, c_col, j_xor):
         assert c_col.shape[1] == 1 and self.orig.shape[0] == c_col.shape[0]
         diff = lambda j: utils.hamming_distance(self.approx[:, j], self.orig[:, j]) - utils.hamming_distance(
-            (self.approx | c_col)[:, j], self.orig[:, j])
+            utils.calc_mix_addition(self.orig, np.tile(c_col, (1, self.cols)), j_xor)[:, j], self.orig[:, j])
         diff_row = np.vectorize(diff)(np.arange(self.cols))
         dc_row = np.where(diff_row < 0, 0, diff_row).astype(bool)
         return dc_row
@@ -75,6 +75,14 @@ class BMF:
         err = np.sum(self.orig ^ cur_approx, axis=0)
         resid_err = np.sum(err) if (n == self.cols) else np.sum(np.partition(err, n)[:n])
         return resid_err
+
+    def __update_approx(self, k):
+        enable_cec = not np.all(self.add_t[k, :] == False)
+        cec_index = np.where(self.add_t[k, :])[0]
+        c_col, dc_row = self.c[:, k][:, np.newaxis], self.dc[k, :]
+        approx = utils.calc_mix_addition(self.approx, c_col & dc_row, cec_index) if (enable_cec) \
+            else self.approx | (c_col & dc_row)
+        self.approx = approx
 
     def __greedy_scheme(self, k):
         assert self.orig.shape == self.approx.shape
@@ -103,11 +111,9 @@ class BMF:
         # choose j-th col of error matrix as a col of compressor
         cec_c_col = lambda j: (cec_error[:, j])[:, np.newaxis]
         # column error clean scheme
-        cec_dc_row = lambda j: self.__column_error_clear(cec_c_col(j))
+        cec_dc_row = lambda j: self.__column_error_clear(cec_c_col(j), j)
         # all candidates from cec
-        # TODO: add type
-        # cec_addt = lambda j:
-        cec_approx = lambda j: self.approx | (cec_c_col(j) & cec_dc_row(j))
+        cec_approx = lambda j: utils.calc_mix_addition(self.approx, cec_c_col(j) & cec_dc_row(j), j)
         # error reduction of all candidates of cec
         cec_err_reduct = lambda j: self.__get_cur_err_reduct(cec_approx(j))
         # zero proportion of dc_row
@@ -117,20 +123,25 @@ class BMF:
         # greedy scheme
         mem_max_score, mem_index = np.max(mem_scores), np.argmax(mem_scores)
         cec_max_score, cec_index = np.max(cec_scores), np.argmax(cec_scores)
+        enable_cec = cec_max_score > mem_max_score
         mem_re_index = np.argmin(mem_re_scores)
         mem_min_re = mem_resid_err(mem_re_index)
         # optimum result
-        c_col, dc_row = (cec_c_col(cec_index), cec_dc_row(cec_index)) if (cec_max_score > mem_max_score) \
+        c_col, dc_row = (cec_c_col(cec_index), cec_dc_row(cec_index)) if (enable_cec) \
             else (mem_c_col(mem_index), mem_dc_row(mem_index))
+        # cec add type
+        add_t = np.array([True if j == cec_index else False for j in range(self.cols)], dtype=bool) if (enable_cec) \
+            else np.zeros(self.cols, dtype=bool)
         # potential result
         p_c_col, p_dc_row = mem_c_col(mem_re_index), mem_dc_row(mem_re_index)
         # update
         self.c = np.hstack([c_col]) if (k == 0) else np.hstack([self.c, c_col])
         self.dc = np.vstack([dc_row]) if (k == 0) else np.vstack([self.dc, dc_row])
-        self.approx = np.dot(self.c, self.dc)
+        self.add_t = np.vstack([add_t]) if (k == 0) else np.vstack([self.add_t, add_t])
         self.__p_c = np.hstack([p_c_col]) if (k == 0) else np.hstack([self.__p_c, p_c_col])
         self.__p_dc = np.vstack([p_dc_row]) if (k == 0) else np.vstack([self.__p_dc, p_dc_row])
         self.__res = np.hstack([mem_min_re]) if (k == 0) else np.hstack([self.__res, mem_min_re])
+        self.__update_approx(k)
 
     def __err_shape_scheme(self, k):
         assert self.orig.shape == self.approx.shape
@@ -138,13 +149,15 @@ class BMF:
             err = self.orig ^ self.approx
             idx = np.argmax(np.sum(err, axis=0))
             c_col = err[:, idx][:, np.newaxis]
-            dc_row = self.__column_error_clear(c_col)
+            dc_row = self.__column_error_clear(c_col, idx)
+            add_t = np.array([True if j == idx else False for j in range(self.cols)], dtype=bool)
             self.c[:, k], self.dc[k, :] = c_col, dc_row
+            self.add_t[k, :] = add_t
         else:
             if (self.__res[k] < self.__hd and k < self.f - 1):
                 self.c[:, k], self.dc[k, :] = self.__p_c[k], self.__p_dc[k]
                 self.__enable_err_shape = True
-        self.approx = np.dot(self.c[:, 0:k + 1], self.dc[0:k + 1, :])
+        self.__update_approx(k)
 
     def run_greedy_scheme(self):
         self.__greedy_scheme_init()
