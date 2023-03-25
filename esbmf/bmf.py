@@ -51,8 +51,9 @@ class BMF:
     def __matrix_error_minimize(self, dc_row):
         assert dc_row.shape[0] == self.orig.shape[1] and len(dc_row.shape) == 1
         e = 1e-10
-        diff = lambda i: np.sum((self.approx[i, :] ^ self.orig[i, :]) * self.w) - np.sum(
-            ((self.approx | dc_row)[i, :] ^ self.orig[i, :]) * self.w)
+        pre_err = (self.approx ^ self.orig) * self.w
+        cur_err = ((self.approx | dc_row) ^ self.orig) * self.w
+        diff = lambda i: np.sum(pre_err[i, :] - cur_err[i, :])
         diff_col = np.vectorize(diff)(np.arange(self.rows))
         num_p, num_n = np.count_nonzero(diff_col > e), np.count_nonzero(diff_col < -e)
         replace_zeros = np.where(np.abs(diff_col) <= e, int(num_p > num_n), diff_col)
@@ -62,8 +63,9 @@ class BMF:
 
     def __column_error_clear(self, c_col, j_xor):
         assert c_col.shape[1] == 1 and self.orig.shape[0] == c_col.shape[0]
+        cur_approx = utils.calc_mix_addition(self.approx, np.tile(c_col, (1, self.cols)), j_xor)
         diff = lambda j: utils.hamming_distance(self.approx[:, j], self.orig[:, j]) - utils.hamming_distance(
-            utils.calc_mix_addition(self.approx, np.tile(c_col, (1, self.cols)), j_xor)[:, j], self.orig[:, j])
+            cur_approx[:, j], self.orig[:, j])
         diff_row = np.vectorize(diff)(np.arange(self.cols))
         dc_row = np.where(diff_row < 0, 0, diff_row).astype(bool)
         return dc_row
@@ -96,7 +98,8 @@ class BMF:
         # choose i-th row of search_space as a row of decompressor
         mem_dc_row = lambda i: self.__search_space[i, :]
         # matrix error minimize scheme
-        mem_c_col = lambda i: self.__matrix_error_minimize(mem_dc_row(i))
+        mem_c_cols = np.array([self.__matrix_error_minimize(mem_dc_row(i)) for i in np.arange(ss_rows)], dtype=bool)
+        mem_c_col = lambda i: mem_c_cols[i, :, :]
         # all candidates from mem
         mem_approx = lambda i: self.approx | (mem_c_col(i) & mem_dc_row(i))
         # error reduction of all candidates of mem
@@ -115,7 +118,8 @@ class BMF:
         # choose j-th col of error matrix as a col of compressor
         cec_c_col = lambda j: (cec_error[:, j])[:, np.newaxis]
         # column error clean scheme
-        cec_dc_row = lambda j: self.__column_error_clear(cec_c_col(j), j)
+        cec_dc_rows = np.array([self.__column_error_clear(cec_c_col(j), j) for j in np.arange(self.cols)], dtype=bool)
+        cec_dc_row = lambda j: cec_dc_rows[j, :]
         # all candidates from cec
         cec_approx = lambda j: utils.calc_mix_addition(self.approx, cec_c_col(j) & cec_dc_row(j), j)
         # error reduction of all candidates of cec
