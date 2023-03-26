@@ -35,16 +35,10 @@ class BMF:
         self.__enable_err_shape = False
         self.approx = np.zeros_like(self.orig, dtype=bool)
 
-    def __generate_search_space(self, step: float, mode: str):
+    def __generate_search_space(self, step: float):
         assert len(self.approx.shape) == 2
         m = self.orig | self.approx
-        # TODO: cp or asso, remove one of them later
-        if mode == 'cp':
-            search_space_t = lambda t: utils.calc_cond_prob_matrix(m, t)
-        elif mode == 'asso':
-            search_space_t = lambda t: utils.calc_asso_matrix(m, t)
-        else:
-            raise ValueError("Invalid mode. Must be 'cp' or 'asso'.")
+        search_space_t = lambda t: utils.calc_cond_prob_matrix(m, t)
         stack = np.vstack([search_space_t(t) for t in np.arange(step, 1.0, step)])
         self.__search_space = np.unique(stack, axis=0)
 
@@ -93,7 +87,7 @@ class BMF:
     def __greedy_scheme(self, k):
         assert self.orig.shape == self.approx.shape
         # using cp - conditional probability to generate search space
-        self.__generate_search_space(0.1, 'cp')
+        self.__generate_search_space(0.1)
         ss_rows = self.__search_space.shape[0]
         # choose i-th row of search_space as a row of decompressor
         mem_dc_row = lambda i: self.__search_space[i, :]
